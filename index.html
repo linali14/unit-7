@@ -66,6 +66,7 @@
             container.appendChild(renderer.domElement);
 
             // --- 2. CONTROLS ---
+            // FIXED: OrbitControls is attached to the THREE object by the script loader
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
