@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Function Grapher - Saddle Surface</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+        }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            border-radius: 4px;
+            font-family: sans-serif;
+            z-index: 5;
+            border-left: 4px solid #2dbd5a;
+            pointer-events: none;
+        }
+        h3 { margin: 0; font-size: 18px; }
+        p { margin: 5px 0 0 0; fontSize: 14px; opacity: 0.8; }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h3>Saddle Surface</h3>
+        <p>z = x² - y²</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Three.js and OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        (function() {
+            // --- 1. INITIALIZATION ---
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+
+            const container = document.getElementById('canvas-container');
+            const camera = new THREE.PerspectiveCamera(
+                45,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(3, 3, 3);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // --- 2. CONTROLS ---
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // --- 3. HELPERS ---
+            const axesHelper = new THREE.AxesHelper(2);
+            scene.add(axesHelper);
+
+            // Ground plane at y=0
+            const gridHelper = new THREE.GridHelper(4, 20, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // --- 4. LIGHTING ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(5, 5, 5);
+            scene.add(pointLight);
+
+            // --- 5. FUNCTION PLOTTING (z = x² - y²) ---
+            // Note: In Three.js coordinates, we map result 'z' to the Y axis to match the visual reference.
+            const f = (x, z) => (x * x) - (z * z);
+
+            const generateGraph = () => {
+                const geometry = new THREE.BufferGeometry();
+                const vertices = [];
+                const colors = [];
+                const indices = [];
+
+                const min = -1;
+                const max = 1;
+                const step = 0.1;
+                const segments = Math.round((max - min) / step);
+
+                // Color Palette: Highs (Red) and Lows (Blue)
+                const colorHigh = new THREE.Color(0xd43333); 
+                const colorLow = new THREE.Color(0x1e66ff);
+
+                for (let i = 0; i <= segments; i++) {
+                    const x = min + (i * step);
+                    for (let j = 0; j <= segments; j++) {
+                        const z = min + (j * step);
+                        const y = f(x, z);
+
+                        vertices.push(x, y, z);
+
+                        // Normalize Y for color (Range of x²-y² in [-1,1] is -1 to 1)
+                        const normalizedY = (y + 1) / 2;
+                        const vertexColor = new THREE.Color().copy(colorLow).lerp(colorHigh, THREE.MathUtils.clamp(normalizedY, 0, 1));
+                        colors.push(vertexColor.r, vertexColor.g, vertexColor.b);
+                    }
+                }
+
+                // Create face indices
+                for (let i = 0; i < segments; i++) {
+                    for (let j = 0; j < segments; j++) {
+                        const a = i * (segments + 1) + j;
+                        const b = (i + 1) * (segments + 1) + j;
+                        const c = (i + 1) * (segments + 1) + (j + 1);
+                        const d = i * (segments + 1) + (j + 1);
+
+                        indices.push(a, b, d);
+                        indices.push(b, c, d);
+                    }
+                }
+
+                geometry.setIndex(indices);
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                geometry.computeVertexNormals();
+
+                const material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    side: THREE.DoubleSide,
+                    shininess: 60,
+                    transparent: true,
+                    opacity: 0.9
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // Wireframe for structural clarity
+                const wireframe = new THREE.LineSegments(
+                    new THREE.WireframeGeometry(geometry),
+                    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2 })
+                );
+                mesh.add(wireframe);
+
+                scene.add(mesh);
+            };
+
+            generateGraph();
+
+            // --- 6. RENDER LOOP ---
+            const animate = () => {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            };
+
+            const handleResize = () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            };
+
+            window.addEventListener('resize', handleResize);
+            
+            // Start the animation
+            animate();
+        })();
+    </script>
+</body>
+</html>
